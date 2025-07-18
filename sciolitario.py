@@ -203,11 +203,15 @@ class GameManager:
     def run(self) -> None:
         self.show()
         try:
-            while True:
+            while self.table.nRows:
                 self.update()
                 self.show()
         
-        except Deck.DrawEmptyErr: print("The deck is empty! You loose.")
+        except Deck.DrawEmptyErr:
+            print("The deck is empty! You loose.")
+            return
+
+        print("The table is empty! You win.")
     
     def update(self) -> None:
         while True:
@@ -241,7 +245,6 @@ class GameManager:
                 first.name, "cannot select discarded cards below the top")
             
             self._removeCard(first)
-            # TODO: win condition
             return
 
         firstIsPile2nd = self.isPile2ndSelected
@@ -259,11 +262,8 @@ class GameManager:
 
         self._removeCard(first)
         self._removeCard(second)
-
-        #TODO: win condition
     
     def selectCard(self) -> Card:
-        # TODO: allow selection with J, Q or K
         userInpt = input("Insert rank (1-10) and suit (H, S, C or D) of selected card: ").strip()
         patMatch = search(r"^(\d\d?|j|q|k) ?(h|s|c|d)$", userInpt.lower())
 
