@@ -30,6 +30,9 @@ class Card:
     
     def canPair(self, card:Self) -> bool: return self.rank + card.rank == 10
 
+    def isExactly(self, suit:Suit, rank:Rank) -> bool:
+        return self.suit == suit and self.rank == rank
+
     def _getRankStr(self, *, asSymbol = True) -> str:
         return str(self.rank) if self.rank < 8 else (Card.FACES if asSymbol else Card.FACE_NAMES)[self.rank - 8]
 
@@ -41,8 +44,9 @@ class Card:
 
     def print(self) -> None: print('\n'.join(self.getCardLayers()))
 
-# TODO: add possibility to select top 2 from pile
 class Deck:
+    EMPTY = "┌   ┐\n\n\n└   ┘"
+
     class DrawEmptyErr(Exception):
         def __init__(self):
             super().__init__("Attempted to draw a card from an empty deck.")
@@ -61,20 +65,52 @@ class Deck:
         self.cards.append(card)
     
     def draw(self) -> Card:
-        try: card = self.remove()
+        try: card = self.cards.pop()
         except IndexError: raise Deck.DrawEmptyErr()
 
         card.isCovered = False
         return card
 
-    def remove(self) -> Card: return self.cards.pop() 
+    def remove(self, card:Card) -> bool:
+        return bool(self.cards.pop()) if self.cards and card is self.cards[-1] else False
 
     def select(self, suit:Suit, rank:Rank) -> Optional[Card]:
+        if not self.cards: return None
+
         topCard = self.cards[-1]
-        return topCard if topCard.suit == suit and topCard.rank == rank else None
+        return topCard if topCard.isExactly(suit, rank) else None
 
     def print(self) -> None:
-        self.cards[-1].print() if self.cards else print("┌   ┐\n\n\n└   ┘")
+        self.cards[-1].print() if self.cards else print(Deck.EMPTY)
+
+class DiscardPile(Deck):
+    def remove(self, card:Card) -> Optional[Card]:
+        if not self.cards: return False
+
+        if card is self.cards[-1]: self.cards.pop()
+        elif len(self.cards) > 1 and card is self.cards[-2]: self.cards.pop(-2)
+        else: return False
+
+        return True
+
+    def select(self, suit:Suit, rank:Rank) -> Optional[Card]:
+        if topCard := super().select(suit, rank): return topCard
+        if len(self.cards) < 2: return None
+
+        nextCard = self.cards[-2]
+        return nextCard if nextCard.isExactly(suit, rank) else None
+
+    def print(self) -> None:
+        if not self.cards:
+            print(Deck.EMPTY)
+            return
+        
+        topCardLayers  = self.cards[-1].getCardLayers()
+        nextCardLayers = self.cards[-2].getCardLayers() if len(self.cards) > 1 else Deck.EMPTY.split('\n')
+
+        buff = topCardLayers[0] + '\n'
+        for i in range(1, 4): buff += topCardLayers[i] + nextCardLayers[i - 1][-3:] + '\n'
+        print(buff + "   " + nextCardLayers[-1])
 
 class Table:
     def __init__(self, deck:Deck, nRows = 6):
@@ -158,9 +194,11 @@ class GameManager:
 
     def __init__(self) -> None:
         self.deck  = Deck(filled = True)
-        self.pile  = Deck()
+        self.pile  = DiscardPile()
         self.comp  = Deck()
         self.table = Table(self.deck)
+
+        self.isPile2ndSelected = False
     
     def run(self) -> None:
         self.show()
@@ -192,19 +230,32 @@ class GameManager:
         self.pile.put(self.deck.draw())
 
     def _removeCard(self, card:Card) -> None:
-        self.pile.remove() if self.pile.cards and self.pile.cards[-1] is card else self.table.remove(card)
+        self.pile.remove(card) or self.table.remove(card)
         self.comp.put(card)
         card.isCovered = True
 
     def pairCards(self) -> None:
+        self.isPile2ndSelected = False
         if (first := self.selectCard()).rank == 10:
+            if self.isPile2ndSelected: raise GameManager.InvalidCardErr(
+                first.name, "cannot select discarded cards below the top")
+            
             self._removeCard(first)
             # TODO: win condition
             return
 
+        firstIsPile2nd = self.isPile2ndSelected
+
         second = self.selectCard()
         if not first.canPair(second): raise GameManager.InvalidPairErr(first, second)
         if first is second: raise GameManager.InvalidPairErr(first, second, "cannot pair a card with itself")
+        
+        if firstIsPile2nd: # 2nd check should only be done if first card is not pile 2nd
+            if second is not self.pile.cards[-1]: raise GameManager.InvalidCardErr(
+                first.name, "cannot select discarded cards below the top")
+        
+        elif self.isPile2ndSelected and first is not self.pile.cards[-1]:
+            raise GameManager.InvalidCardErr(second.name, "cannot select discarded cards below the top")
 
         self._removeCard(first)
         self._removeCard(second)
@@ -218,14 +269,17 @@ class GameManager:
 
         if not patMatch: raise GameManager.InvalidCardErr(userInpt, "could not identify valid suit and rank")
 
+        suit = Suit[Suit._member_names_["shdc".find(patMatch.group(2))]]
         if (rank := patMatch.group(1)).isalpha(): rank = 8 + Card.FACES.find(rank.upper())
         else:
             try: rank = intoRank(int(rank))
             except ValueError as err: raise GameManager.InvalidCardErr(userInpt, str(err))
 
-        suit = Suit[Suit._member_names_["shdc".find(patMatch.group(2))]]
-        if card := self.pile.cards and self.pile.select(suit, rank) or self.table.select(suit, rank):
-            return card
+        if card := self.pile.select(suit, rank): # condition split for length
+            if len(self.pile.cards) > 1 and card is self.pile.cards[-2]: self.isPile2ndSelected = True
+        
+        if not card: card = self.table.select(suit, rank)
+        if card: return card
 
         raise GameManager.InvalidCardErr(userInpt, "The selected card is not available")
 
