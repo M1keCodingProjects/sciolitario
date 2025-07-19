@@ -113,6 +113,8 @@ class DiscardPile(Deck):
         print(buff + "   " + nextCardLayers[-1])
 
 class Table:
+    LAYER_SEP = ('¿', Card.BOTTOM[1], ' ')
+
     def __init__(self, deck:Deck, nRows = 6):
         self.nRows = nRows
 
@@ -160,25 +162,45 @@ class Table:
         if self.lastRowExists: self.lastRowExists = False
         else: self.nRows -= 1
 
-    def _getRowLayer(self, y:int, layers:tuple[str, ...]) -> str:
-        return ' ' * (3 * (self.nRows - y - 1)) + ' '.join(layers)
-
     def print(self) -> None:
-        cards = list(self.cards.values())
-        
+        buff    = ""
+        startId = 0
+        cards   = list(self.cards.values())
         for y in range(self.nRows):
-            rowBuff = ""
-            startId = Table._getCombinations(y)
-
-            i = 0
-            for layers in zip(*map(Card.getCardLayers, cards[startId:startId + y + 1])):
-                rowBuff += bool(i) * '\n' + self._getRowLayer(y, layers)
-                i += 1
+            leftPad = ' ' * (3 * (self.nRows - y - 1))
+            row     = cards[startId:startId + y + 1]
+            layer0  = leftPad
+            layer1  = leftPad
+            for x, card in enumerate(row):
+                isRightmost = x == y
+                if card: # Here you know at least 1 card is covering the one above
+                    layers  = card.getCardLayers()
+                    layer0 += layers[0] + Table.LAYER_SEP[0] * (not isRightmost)
+                    layer1 += layers[1] + Table.LAYER_SEP[1] * (not isRightmost)
+                    continue
             
-            print(rowBuff)
+                if not y: continue
 
-        if self.lastRowExists:
-            print('\n'.join(map(' '.join, zip(*map(Card.getCardLayers, cards[-self.nRows:])))))
+                isLeftmost  = not x
+                leftCovered  = Card.getCardLayers(cards[startId + x - y - 1])
+                rightCovered = Card.getCardLayers(cards[startId + x - y])
+
+                layer0 += ("  " if isLeftmost else leftCovered[2][3:]) + Table.LAYER_SEP[2] + ("   " if isRightmost else rightCovered[2][:3])
+                layer1 += ("  " if isLeftmost else leftCovered[3][3:]) + Table.LAYER_SEP[2] + ("   " if isRightmost else rightCovered[3][:3])
+            
+            buff    += layer0 + '\n' + layer1 + '\n'
+            startId += y + 1
+        
+        # Either we draw the special case row or finish the last row
+        layers = [leftPad] * (2 + 2 * self.lastRowExists)
+        for x, card in enumerate(cards[-self.nRows:]):
+            cardLayers = Card.getCardLayers(card)
+            cardAbove  = row[x]
+            
+            if not card: cardLayers = Card.getCardLayers(cardAbove)[-2:] + cardLayers[-2:]
+            for i in range(2 + 2 * self.lastRowExists): layers[i] += cardLayers[i] + Table.LAYER_SEP[2]
+
+        print(buff + '\n'.join(layers))
 
 class GameManager:
     class InvalidCardErr(Exception):
