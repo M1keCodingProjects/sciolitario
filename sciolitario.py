@@ -16,6 +16,7 @@ def intoRank(n:int) -> Rank:
     return n
 
 class Card:
+    COVER_SUIT = '¿'
     TOP        = "┌───┐"
     BOTTOM     = "└───┘"
     FACES      = "JQKA"
@@ -32,6 +33,8 @@ class Card:
 
     def isExactly(self, suit:Suit, rank:Rank) -> bool:
         return self.suit == suit and self.rank == rank
+    
+    def getSuitStr(self) -> str: return Card.COVER_SUIT if self.isCovered else self.suit
 
     def _getRankStr(self, *, asSymbol = True) -> str:
         faces = Card.FACES if asSymbol else Card.FACE_NAMES
@@ -176,18 +179,22 @@ class Table:
             layer0  = leftPad
             layer1  = leftPad
             for x, card in enumerate(row):
+                rightCovered = cards[startId + x - y]
+
+                # When empty it's also meaningless vvv
+                suitOnTop   = rightCovered.getSuitStr() if rightCovered else ""
                 isRightmost = x == y
                 if card: # Here you know at least 1 card is covering the one above
                     layers  = card.getCardLayers()
-                    layer0 += layers[0] + Table.LAYER_SEP[0] * (not isRightmost)
+                    layer0 += layers[0] + suitOnTop * (not isRightmost)
                     layer1 += layers[1] + Table.LAYER_SEP[1] * (not isRightmost)
                     continue
             
                 if not y: continue
 
-                isLeftmost  = not x
+                isLeftmost   = not x
                 leftCovered  = Card.getCardLayers(cards[startId + x - y - 1])
-                rightCovered = Card.getCardLayers(cards[startId + x - y])
+                rightCovered = Card.getCardLayers(rightCovered)
 
                 layer0 += ("  " if isLeftmost else leftCovered[2][3:]) + Table.LAYER_SEP[2] + ("   " if isRightmost else rightCovered[2][:3])
                 layer1 += ("  " if isLeftmost else leftCovered[3][3:]) + Table.LAYER_SEP[2] + ("   " if isRightmost else rightCovered[3][:3])
@@ -226,7 +233,6 @@ class GameManager:
         self.isPile2ndSelected = False
     
     def run(self) -> None:
-        self.show()
         print(f"""
 Welcome to solitaire! Your goal is to clear the table by making pairs.
 Any 2 cards with ranks adding up to exactly 10 can form a pair.
@@ -237,13 +243,17 @@ and S is the suit: H for Hearts({Suit.Hearts}), S for Spades({Suit.Spades}), C f
 Good luck!""")
         try:
             while self.table.nRows:
-                self.update()
                 self.show()
+                self.update()
         
         except Deck.DrawEmptyErr:
+            self.revealCards()
+            self.show()
             print("The deck is empty! You loose.")
             return
 
+        self.revealCards()
+        self.show()
         print("The table is empty! You win.")
     
     def update(self) -> None:
@@ -264,6 +274,10 @@ Good luck!""")
         self.pile.remove(card) or self.table.remove(card)
         self.comp.put(card)
         card.isCovered = True
+
+    def revealCards(self) -> None:
+        for card in self.table.cards.values():
+            if card: card.isCovered = False
 
     def pairCards(self, userInpt:str) -> None:
         userInpts = userInpt.split()
