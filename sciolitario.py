@@ -170,6 +170,9 @@ class Table:
         else: self.nRows -= 1
 
     def print(self) -> None:
+        if not self.nRows:
+            print(Deck.EMPTY); return
+
         buff    = ""
         startId = 0
         cards   = list(self.cards.values())
