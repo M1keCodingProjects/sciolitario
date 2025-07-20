@@ -234,8 +234,7 @@ Jacks are worth 8, Queens 9 and Kings 10 (Aces 1).
 The deck is a standard 40-cards european deck, so no jokers.
 Specify cards to pair as "RS RS", where R is the rank (1-10 or J, Q, K, A)
 and S is the suit: H for Hearts({Suit.Hearts}), S for Spades({Suit.Spades}), C for Clubs({Suit.Clubs}) and D for Diamonds({Suit.Diamonds}).
-Good luck!
-""")
+Good luck!""")
         try:
             while self.table.nRows:
                 self.update()
@@ -249,7 +248,7 @@ Good luck!
     
     def update(self) -> None:
         while True:
-            userInpt = input("Draw & discard (d) or specify cards to pair: ").strip().lower()
+            userInpt = input("\nDraw & discard (d) or specify cards to pair: ").strip().lower()
             if not userInpt: continue
 
             if userInpt == 'd':
@@ -336,14 +335,12 @@ Good luck!
     def show(self) -> None:
         self.table.print()
 
-        print(f"\nCards in deck: {len(self.deck.cards)}")
+        print(f"\nCompleted cards: {len(self.comp.cards)}")
+        print(f"Cards in deck: {len(self.deck.cards)}")
         self.deck.print()
 
         print(f"\nDiscarded cards: {len(self.pile.cards)}")
         self.pile.print()
-
-        print(f"\nCompleted cards: {len(self.comp.cards)}")
-        self.comp.print()
 
 if __name__ == "__main__":
     GameManager().run()
